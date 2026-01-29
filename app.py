@@ -71,10 +71,17 @@ def similarity(a,b):
     return SequenceMatcher(None,a,b).ratio()
 
 # ----------------- MySQL Setup -----------------
-app.config["MYSQL_HOST"] = os.environ.get("MYSQL_HOST", "localhost")
-app.config["MYSQL_USER"] = os.environ.get("MYSQL_USER", "root")
-app.config["MYSQL_PASSWORD"] = os.environ.get("MYSQL_PASSWORD", "Man@6jan")
-app.config["MYSQL_DB"] = os.environ.get("MYSQL_DB", "demnet_db")
+# app.config["MYSQL_HOST"] = os.environ.get("MYSQL_HOST", "localhost")
+# app.config["MYSQL_USER"] = os.environ.get("MYSQL_USER", "root")
+# app.config["MYSQL_PASSWORD"] = os.environ.get("MYSQL_PASSWORD", "Man@6jan")
+# app.config["MYSQL_DB"] = os.environ.get("MYSQL_DB", "demnet_db")
+
+app.config["MYSQL_HOST"] = os.environ.get("MYSQLHOST")
+app.config["MYSQL_USER"] = os.environ.get("MYSQLUSER")
+app.config["MYSQL_PASSWORD"] = os.environ.get("MYSQLPASSWORD")
+app.config["MYSQL_DB"] = os.environ.get("MYSQLDATABASE")
+app.config["MYSQL_PORT"] = int(os.environ.get("MYSQLPORT", 3306))
+
 
 mysql = MySQL(app)
 
@@ -101,18 +108,32 @@ def profile():
 
 @app.route("/signup", methods=["POST"])
 def signup():
-    cur = mysql.connection.cursor()
     try:
+        data = request.get_json() or request.form
+
+        name = data.get("name")
+        email = data.get("email")
+        password = data.get("password")
+
+        if not name or not email or not password:
+            return jsonify({"error": "Missing fields"}), 400
+
+        hashed = generate_password_hash(password)
+
+        cur = mysql.connection.cursor()
         cur.execute(
-            "INSERT INTO users(name,email,password) VALUES(%s,%s,%s)",
-            (request.form["name"], request.form["email"], generate_password_hash(request.form["password"]))
+            "INSERT INTO users (name, email, password) VALUES (%s,%s,%s)",
+            (name, email, hashed)
         )
         mysql.connection.commit()
-        flash("Signup successful", "success")
-    except:
-        flash("Email already exists", "error")
-    cur.close()
-    return redirect("/profile")
+        cur.close()
+
+        return jsonify({"message": "Signup successful"}), 201
+
+    except Exception as e:
+        print("SIGNUP ERROR:", e)
+        return jsonify({"error": "Server error"}), 500
+
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -601,6 +622,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
