@@ -71,10 +71,11 @@ def similarity(a,b):
     return SequenceMatcher(None,a,b).ratio()
 
 # ----------------- MySQL Setup -----------------
-app.config["MYSQL_HOST"] = os.environ.get"localhost"
-app.config["MYSQL_USER"] = os.environ.get"root"
-app.config["MYSQL_PASSWORD"] = os.environ.get"Man@6jan"
-app.config["MYSQL_DB"] = os.environ.get"demnet_db"
+app.config["MYSQL_HOST"] = os.environ.get("MYSQL_HOST", "localhost")
+app.config["MYSQL_USER"] = os.environ.get("MYSQL_USER", "root")
+app.config["MYSQL_PASSWORD"] = os.environ.get("MYSQL_PASSWORD", "Man@6jan")
+app.config["MYSQL_DB"] = os.environ.get("MYSQL_DB", "demnet_db")
+
 mysql = MySQL(app)
 
 # # ----------------- Load Chat Data -----------------
@@ -600,6 +601,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
