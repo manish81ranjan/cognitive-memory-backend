@@ -94,8 +94,12 @@ mysql = MySQL(app)
 @app.route("/")
 def index():
     if "user_id" not in session:
-        return redirect("/profile")
+        return redirect("/login-page")
     return render_template("index.html")
+@app.route("/login-page")
+def login_page():
+    return render_template("login.html")
+
 
 @app.route("/profile")
 def profile():
@@ -173,7 +177,8 @@ def auth():
     if not user:
         session.clear()
         return redirect("/profile")
-    return render_template("auth.html", name=user[0], email=user[1])
+    return render_template("auth.html", name=user["name"], email=user["email"])
+
 
 @app.route("/logout")
 def logout():
@@ -201,6 +206,9 @@ def chat_api():
 
 # ----------------- Predict Route -----------------
 @app.route("/predict", methods=["POST"])
+if "user_id" not in session:
+    return redirect("/login-page")
+
 def predict():
     patient_name = request.form["patient_name"]
     mri_id = request.form["mri_id"]
@@ -637,6 +645,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
