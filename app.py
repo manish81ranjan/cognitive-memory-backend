@@ -135,13 +135,34 @@ def signup():
         session["user_id"] = user["id"]
 
         cur.close()
-        return redirect("/")
+        return redirect("/login")
 
     except Exception as e:
         print("SIGNUP ERROR:", e)
         return jsonify({"error": "Email already exists"}), 400
 
 
+# @app.route("/login", methods=["POST"])
+# def login():
+#     try:
+#         data = request.get_json(silent=True) or request.form
+#         email = data.get("email")
+#         password = data.get("password")
+
+#         cur = mysql.connection.cursor()
+#         cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+#         user = cur.fetchone()
+#         cur.close()
+
+#         if user and check_password_hash(user["password"], password):
+#             session["user_id"] = user["id"]
+#             return redirect("/")
+
+#         return jsonify({"error": "Invalid credentials"}), 401
+
+#     except Exception as e:
+#         print("LOGIN ERROR:", e)
+#         return jsonify({"error": "Server error"}), 500
 @app.route("/login", methods=["POST"])
 def login():
     try:
@@ -163,6 +184,7 @@ def login():
     except Exception as e:
         print("LOGIN ERROR:", e)
         return jsonify({"error": "Server error"}), 500
+
 
 
 
@@ -662,6 +684,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
