@@ -96,9 +96,9 @@ def index():
     if "user_id" not in session:
         return redirect("/profile")
     return render_template("index.html")
-@app.route("/profile")
-def login_page():
-    return render_template("profile.html")
+# @app.route("/profile")
+# def login_page():
+#     return render_template("profile.html")
 
 
 @app.route("/profile")
@@ -232,129 +232,6 @@ def chat_api():
     return jsonify({"reply":"Sorry, I am trained only on DEMNET medical knowledge."})
 
 
-# with open("chat_knowledge.json","r",encoding="utf-8") as f:
-#     CHAT_DATA = json.load(f)
-
-# ----------------- Predict Route -----------------
-# @app.route("/predict", methods=["POST"])
-# def predict():
-#     if "user_id" not in session:
-#         return redirect("/login-page")
-#     patient_name = request.form["patient_name"]
-#     mri_id = request.form["mri_id"]
-#     file = request.files["mri_image"]
-
-#     if not allowed_file(file.filename):
-#         return "Invalid file"
-
-#     path = os.path.join(UPLOAD_FOLDER, secure_filename(file.filename))
-#     file.save(path)
-
-#     # Model prediction
-#     img_array = preprocess_image(path)
-#     preds = model.predict(img_array)[0]
-#     idx = int(np.argmax(preds))
-#     confidence = round(float(preds[idx]) * 100, 2)
-
-#     classes = ["Mild Dementia", "Moderate Dementia", "Non Demented", "Very Mild Dementia"]
-#     prediction = classes[idx]
-
-#     if confidence > 85:
-#         severity = "HIGH"
-#         explanation = "High probability detected. Immediate consultation needed."
-#     elif confidence > 60:
-#         severity = "MEDIUM"
-#         explanation = "Moderate risk. Monitoring advised."
-#     else:
-#         severity = "LOW"
-#         explanation = "Low risk detected."
-
-#     # Grad-CAM / Heatmap
-#     heatmap = attention_heatmap(path)
-#     img = cv2.resize(cv2.imread(path), (128, 128))
-#     heat = cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
-#     overlay = cv2.addWeighted(img, 0.6, heat, 0.4, 0)
-#     cv2.imwrite("static/gradcam.png", overlay)
-
-#     cur = mysql.connection.cursor()
-#     # Save stats
-#     model_loss = round(1.2 - (confidence / 100), 3)
-#     model_acc = round(confidence / 100, 3)
-#     cur.execute("INSERT INTO model_stats(loss,accuracy) VALUES(%s,%s)", (model_loss, model_acc))
-
-#     cur.execute("""
-#         INSERT INTO prediction_logs(predicted_class,count)
-#         VALUES(%s,1)
-#         ON DUPLICATE KEY UPDATE count = count+1
-#     """, (prediction,))
-
-#     cur.execute("""
-#         INSERT INTO confusion_matrix(actual,predicted,total)
-#         VALUES(%s,%s,1)
-#         ON DUPLICATE KEY UPDATE total = total+1
-#     """, (prediction, prediction))
-
-#     cur.execute("""
-#         INSERT INTO patient_reports
-#         (patient_name,mri_id,prediction,confidence,severity,explanation,report_file)
-#         VALUES (%s,%s,%s,%s,%s,%s,%s)
-#         ON DUPLICATE KEY UPDATE
-#         patient_name=VALUES(patient_name),
-#         prediction=VALUES(prediction),
-#         confidence=VALUES(confidence),
-#         severity=VALUES(severity),
-#         explanation=VALUES(explanation),
-#         report_file=VALUES(report_file)
-#     """, (patient_name, mri_id, prediction, confidence, severity, explanation, "gradcam.png"))
-
-#     # # ================= SAVE MRI UPLOAD HISTORY =================
-#     cur.execute("""
-#     INSERT INTO mri_uploads
-#     (user_id, patient_name, mri_id, file_url, prediction, confidence)
-#     VALUES (%s,%s,%s,%s,%s,%s)
-# """, (
-#     session["user_id"],
-#     patient_name,
-#     mri_id,
-#     secure_filename(file.filename),
-#     prediction,
-#     confidence
-# ))
-
-
-#     mysql.connection.commit()
-
-#     # Fetch dashboard stats safely
-#     cur.execute("SELECT AVG(loss), AVG(accuracy) FROM model_stats")
-#     avg_stats = cur.fetchone()
-#     cur.execute("SELECT predicted_class, count FROM prediction_logs")
-#     distribution = cur.fetchall()
-#     cur.execute("SELECT actual, predicted, total FROM confusion_matrix")
-#     matrix = cur.fetchall()
-#     cur.close()
-
-#     session["report"] = {
-#         "patient": patient_name,
-#         "mri": mri_id,
-#         "prediction": prediction,
-#         "confidence": confidence,
-#         "severity": severity,
-#         "explanation": explanation
-#     }
-
-#     return render_template(
-#         "result.html",
-#         prediction=prediction,
-#         confidence=confidence,
-#         severity=severity,
-#         explanation=explanation,
-#         gradcam_image=url_for("static", filename="gradcam.png"),
-#         avg_loss=round(avg_stats[0], 3) if avg_stats else 0,
-#         avg_acc=round(avg_stats[1], 3) if avg_stats else 0,
-#         distribution=distribution,
-#         matrix=matrix
-#     )
-
 model = None
 
 def get_model():
@@ -367,58 +244,60 @@ def get_model():
 @app.route("/predict", methods=["GET", "POST"])
 def predict():
 
-    # handle browser access
+    # 🚨 ABSOLUTE EXIT FOR GET
     if request.method == "GET":
-        return redirect("/")
+        return "Predict endpoint works. Use POST.", 200
 
-    # session check
+    # -------- POST ONLY BELOW --------
+
     if "user_id" not in session:
         return redirect("/profile")
 
     if "mri_image" not in request.files:
-        flash("No file uploaded")
-        return redirect("/")
+        return "No file uploaded", 400
 
     file = request.files["mri_image"]
     if file.filename == "":
-        flash("No file selected")
-        return redirect("/")
+        return "Empty filename", 400
+
+    # ensure folders exist
+    os.makedirs("uploads", exist_ok=True)
+    os.makedirs("static", exist_ok=True)
 
     filename = secure_filename(file.filename)
     filepath = os.path.join("uploads", filename)
     file.save(filepath)
 
-    # image preprocessing
     img = cv2.imread(filepath)
+    if img is None:
+        return "Invalid image", 400
+
     img = cv2.resize(img, (224, 224))
     img = img / 255.0
     img = np.expand_dims(img, axis=0)
 
-    # model prediction
     model = get_model()
     preds = model.predict(img)[0]
 
-    class_idx = np.argmax(preds)
-    confidence = float(preds[class_idx]) * 100
+    idx = int(np.argmax(preds))
+    confidence = float(preds[idx]) * 100
 
-    label_map = ["Normal", "Mild Dementia", "Moderate Dementia", "Severe Dementia"]
-    result = label_map[class_idx]
+    labels = ["Normal", "Mild Dementia", "Moderate Dementia", "Severe Dementia"]
+    result = labels[idx]
 
-    # save DB result
     cur = mysql.connection.cursor()
-    cur.execute("""
-        INSERT INTO mri_results(user_id, result, confidence)
-        VALUES (%s, %s, %s)
-    """, (session["user_id"], result, confidence))
+    cur.execute(
+        "INSERT INTO mri_results(user_id, result, confidence) VALUES (%s,%s,%s)",
+        (session["user_id"], result, confidence)
+    )
     mysql.connection.commit()
 
-    # fetch averages
     cur.execute("SELECT AVG(loss) AS loss, AVG(accuracy) AS acc FROM model_stats")
     avg = cur.fetchone()
     cur.close()
 
-    avg_loss = round(avg["loss"], 3) if avg else 0
-    avg_acc  = round(avg["acc"], 3) if avg else 0
+    avg_loss = round(avg["loss"], 3) if avg and avg["loss"] else 0
+    avg_acc  = round(avg["acc"], 3) if avg and avg["acc"] else 0
 
     return render_template(
         "result.html",
@@ -755,6 +634,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
