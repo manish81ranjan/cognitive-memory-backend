@@ -220,7 +220,7 @@ def chat_api():
 @app.route("/predict", methods=["POST"])
 def predict():
     if "user_id" not in session:
-    return redirect("/login-page")
+        return redirect("/login-page")
     patient_name = request.form["patient_name"]
     mri_id = request.form["mri_id"]
     file = request.files["mri_image"]
@@ -656,6 +656,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
