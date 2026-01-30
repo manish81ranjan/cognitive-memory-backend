@@ -232,15 +232,6 @@ def chat_api():
     return jsonify({"reply":"Sorry, I am trained only on DEMNET medical knowledge."})
 
 
-model = None
-
-def get_model():
-    global model
-    if model is None:
-        model = tf.keras.models.load_model(MODEL_PATH, compile=False)
-    return model
-
-
 @app.route("/predict", methods=["GET", "POST"])
 def predict():
 
@@ -634,6 +625,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
