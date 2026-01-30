@@ -76,14 +76,15 @@ def similarity(a,b):
 # app.config["MYSQL_PASSWORD"] = os.environ.get("MYSQL_PASSWORD", "Man@6jan")
 # app.config["MYSQL_DB"] = os.environ.get("MYSQL_DB", "demnet_db")
 
-app.config["MYSQL_HOST"] = os.environ.get("MYSQLHOST")
-app.config["MYSQL_USER"] = os.environ.get("MYSQLUSER")
-app.config["MYSQL_PASSWORD"] = os.environ.get("MYSQLPASSWORD")
-app.config["MYSQL_DB"] = os.environ.get("MYSQLDATABASE")
-app.config["MYSQL_PORT"] = int(os.environ.get("MYSQLPORT", 3306))
-
+app.config["MYSQL_HOST"] = os.getenv("MYSQL_HOST")
+app.config["MYSQL_USER"] = os.getenv("MYSQL_USER")
+app.config["MYSQL_PASSWORD"] = os.getenv("MYSQL_PASSWORD")
+app.config["MYSQL_DB"] = os.getenv("MYSQL_DATABASE")
+app.config["MYSQL_PORT"] = int(os.getenv("MYSQL_PORT", 3306))
+app.config["MYSQL_CURSORCLASS"] = "DictCursor"
 
 mysql = MySQL(app)
+
 
 # # ----------------- Load Chat Data -----------------
 # with open("chat_knowledge.json", "r", encoding="utf-8") as f:
@@ -104,7 +105,7 @@ def profile():
     cur.execute("SELECT name,email FROM users WHERE id=%s", (session["user_id"],))
     user = cur.fetchone()
     cur.close()
-    return render_template("profile.html", name=user[0], email=user[1])
+    return render_template("profile.html", name=user["name"], email=user["email"])
 
 @app.route("/signup", methods=["POST"])
 def signup():
@@ -120,22 +121,22 @@ def signup():
 
         cur = mysql.connection.cursor()
         cur.execute(
-            "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)",
+            "INSERT INTO users (name,email,password) VALUES (%s,%s,%s)",
             (name, email, generate_password_hash(password))
         )
         mysql.connection.commit()
 
-        # auto login after signup
         cur.execute("SELECT id FROM users WHERE email=%s", (email,))
-        user_id = cur.fetchone()[0]
-        session["user_id"] = user_id
+        user = cur.fetchone()
+        session["user_id"] = user["id"]
 
         cur.close()
-        return redirect("/")  # 🔥 MAIN INDEX
+        return redirect("/")
 
     except Exception as e:
         print("SIGNUP ERROR:", e)
         return jsonify({"error": "Email already exists"}), 400
+
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -145,19 +146,20 @@ def login():
         password = data.get("password")
 
         cur = mysql.connection.cursor()
-        cur.execute("SELECT id, password FROM users WHERE email=%s", (email,))
+        cur.execute("SELECT * FROM users WHERE email=%s", (email,))
         user = cur.fetchone()
         cur.close()
 
-        if user and check_password_hash(user[1], password):
-            session["user_id"] = user[0]
-            return redirect("/")  # 🔥 MAIN INDEX
+        if user and check_password_hash(user["password"], password):
+            session["user_id"] = user["id"]
+            return redirect("/")
 
         return jsonify({"error": "Invalid credentials"}), 401
 
     except Exception as e:
         print("LOGIN ERROR:", e)
         return jsonify({"error": "Server error"}), 500
+
 
 
 @app.route("/auth")
@@ -635,6 +637,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
