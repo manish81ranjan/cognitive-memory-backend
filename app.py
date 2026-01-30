@@ -109,43 +109,56 @@ def profile():
 @app.route("/signup", methods=["POST"])
 def signup():
     try:
-        data = request.get_json() or request.form
+        data = request.get_json(silent=True) or request.form
 
         name = data.get("name")
         email = data.get("email")
         password = data.get("password")
 
-        if not name or not email or not password:
+        if not all([name, email, password]):
             return jsonify({"error": "Missing fields"}), 400
-
-        hashed = generate_password_hash(password)
 
         cur = mysql.connection.cursor()
         cur.execute(
-            "INSERT INTO users (name, email, password) VALUES (%s,%s,%s)",
-            (name, email, hashed)
+            "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)",
+            (name, email, generate_password_hash(password))
         )
         mysql.connection.commit()
-        cur.close()
 
-        return jsonify({"message": "Signup successful"}), 201
+        # auto login after signup
+        cur.execute("SELECT id FROM users WHERE email=%s", (email,))
+        user_id = cur.fetchone()[0]
+        session["user_id"] = user_id
+
+        cur.close()
+        return redirect("/")  # 🔥 MAIN INDEX
 
     except Exception as e:
         print("SIGNUP ERROR:", e)
-        return jsonify({"error": "Server error"}), 500
-
+        return jsonify({"error": "Email already exists"}), 400
 
 @app.route("/login", methods=["POST"])
 def login():
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM users WHERE email=%s", (request.form["email"],))
-    user = cur.fetchone()
-    cur.close()
-    if user and check_password_hash(user[3], request.form["password"]):
-        session["user_id"] = user[0]
-        return redirect("/auth")
-    flash("Invalid credentials", "error")
-    return redirect("/profile")
+    try:
+        data = request.get_json(silent=True) or request.form
+        email = data.get("email")
+        password = data.get("password")
+
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT id, password FROM users WHERE email=%s", (email,))
+        user = cur.fetchone()
+        cur.close()
+
+        if user and check_password_hash(user[1], password):
+            session["user_id"] = user[0]
+            return redirect("/")  # 🔥 MAIN INDEX
+
+        return jsonify({"error": "Invalid credentials"}), 401
+
+    except Exception as e:
+        print("LOGIN ERROR:", e)
+        return jsonify({"error": "Server error"}), 500
+
 
 @app.route("/auth")
 def auth():
@@ -622,6 +635,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
