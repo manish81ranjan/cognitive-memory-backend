@@ -115,7 +115,6 @@ def profile():
 def signup():
     try:
         data = request.get_json(silent=True) or request.form
-
         name = data.get("name")
         email = data.get("email")
         password = data.get("password")
@@ -129,17 +128,15 @@ def signup():
             (name, email, generate_password_hash(password))
         )
         mysql.connection.commit()
-
-        cur.execute("SELECT id FROM users WHERE email=%s", (email,))
-        user = cur.fetchone()
-        session["user_id"] = user["id"]
-
         cur.close()
+
+        # ✅ DO NOT login here
         return redirect("/login")
 
     except Exception as e:
         print("SIGNUP ERROR:", e)
         return jsonify({"error": "Email already exists"}), 400
+
 
 
 # @app.route("/login", methods=["POST"])
@@ -684,6 +681,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
