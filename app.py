@@ -460,26 +460,32 @@ def admin_redirect():
 # ----------------- Admin Dashboard -----------------
 @app.route("/admin-dashboard")
 def admin_dashboard():
-    if "admin" not in session:
-        return redirect("/admin-login")
+    try:
+        if "admin" not in session:
+            return redirect("/admin-login")
+        
+        cur = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        
+        cur.execute("SELECT COUNT(*) AS total FROM users")
+        users_row = cur.fetchone()
+        users = users_row["total"] if users_row else 0
 
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT COUNT(*) FROM users")
-    users = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) AS total FROM patient_reports")
+        reports_row = cur.fetchone()
+        reports = reports_row["total"] if reports_row else 0
 
-    cur.execute("SELECT COUNT(*) FROM patient_reports")
-    reports = cur.fetchone()[0]
+        cur.execute("SELECT MAX(accuracy) AS best FROM model_stats")
+        best_row = cur.fetchone()
+        best_acc = best_row["best"] if best_row and best_row["best"] is not None else 0
 
-    cur.execute("SELECT MAX(accuracy) FROM model_stats")
-    best_acc = cur.fetchone()[0]
-    cur.close()
-
-    return render_template("admin_dashboard.html",
-                           users=users,
-                           reports=reports,
-                           best_acc=best_acc)
-
-
+        cur.close()
+        return render_template("admin_dashboard.html",
+                               users=users,
+                               reports=reports,
+                               best_acc=best_acc)
+    except Exception as e:
+        print("ADMIN DASHBOARD ERROR:", e)
+        return "Internal Server Error"
 
 
 @app.route("/admin-reports")
@@ -656,6 +662,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
