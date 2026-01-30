@@ -170,14 +170,26 @@ def login():
 def auth():
     if "user_id" not in session:
         return redirect("/profile")
+
     cur = mysql.connection.cursor()
-    cur.execute("SELECT name,email FROM users WHERE id=%s", (session["user_id"],))
+    cur.execute(
+        "SELECT name, email FROM users WHERE id = %s",
+        (session["user_id"],)
+    )
     user = cur.fetchone()
     cur.close()
+
     if not user:
         session.clear()
         return redirect("/profile")
-    return render_template("auth.html", name=user["name"], email=user["email"])
+
+    # ✅ DictCursor → use KEYS, not indexes
+    return render_template(
+        "auth.html",
+        name=user["name"],
+        email=user["email"]
+    )
+
 
 
 @app.route("/logout")
@@ -644,6 +656,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
