@@ -94,11 +94,11 @@ mysql = MySQL(app)
 @app.route("/")
 def index():
     if "user_id" not in session:
-        return redirect("/login-page")
+        return redirect("/profile")
     return render_template("index.html")
-@app.route("/login-page")
+@app.route("/profile")
 def login_page():
-    return render_template("login.html")
+    return render_template("profile.html")
 
 
 @app.route("/profile")
@@ -662,6 +662,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
