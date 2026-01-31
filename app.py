@@ -298,45 +298,44 @@ def chat_api():
 #         avg_acc=avg_acc
 #     )
 
-@app.route("/predict", methods=["GET", "POST"])
+@app.route("/predict", methods=["POST"])
 def predict():
 
-    if request.method == "GET":
-        return "Predict endpoint works. Use POST.", 200
-
     if "user_id" not in session:
-        return redirect("/profile")
+        return jsonify({"error": "Unauthorized"}), 401
 
     if "mri_image" not in request.files:
-        return "No file uploaded", 400
+        return jsonify({"error": "No file uploaded"}), 400
 
     file = request.files["mri_image"]
     if file.filename == "":
-        return "Empty filename", 400
+        return jsonify({"error": "Empty filename"}), 400
 
     filename = secure_filename(file.filename)
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
     file.save(filepath)
 
-    img = cv2.imread(filepath)
-    if img is None:
-        return "Invalid image", 400
+    try:
+        img = Image.open(filepath).convert("L").resize((128, 128))
+        img = np.array(img) / 255.0
+        img = img.reshape(1, 128, 128, 1)
 
-    img = cv2.resize(img, (224, 224)) / 255.0
-    img = np.expand_dims(img, axis=0)
+        preds = model.predict(img)[0]
 
-    model = get_model()
-    preds = model.predict(img)[0]
+        idx = int(np.argmax(preds))
+        confidence = float(preds[idx]) * 100
 
-    idx = int(np.argmax(preds))
-    confidence = float(preds[idx]) * 100
+        labels = ["Normal", "Mild Dementia", "Moderate Dementia", "Severe Dementia"]
 
-    labels = ["Normal", "Mild Dementia", "Moderate Dementia", "Severe Dementia"]
+        return jsonify({
+            "prediction": labels[idx],
+            "confidence": round(confidence, 2)
+        })
 
-    return jsonify({
-        "prediction": labels[idx],
-        "confidence": round(confidence, 2)
-    })
+    except Exception as e:
+        print("PREDICT ERROR:", e)
+        return jsonify({"error": "Prediction failed"}), 500
+
 
 # ----------------- Download PDF Report -----------------
 @app.route("/download_report")
@@ -664,6 +663,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
