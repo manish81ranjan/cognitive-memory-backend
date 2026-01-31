@@ -5,7 +5,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from difflib import SequenceMatcher
 import json, os, io
-import tensorflow as tf
+# import tensorflow as tf
+import tflite_runtime.interpreter as tflite
 import numpy as np
 from PIL import Image
 import cv2
@@ -41,7 +42,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
-MODEL_PATH = os.path.join(BASE_DIR, "data", "best_demnet_model (1).keras")
+# MODEL_PATH = os.path.join(BASE_DIR, "data", "best_demnet_model (1).keras")
+TFLITE_MODEL_PATH = os.path.join(BASE_DIR, "data", "best_demnet_model.tflite")
 
 app = Flask(__name__)
 app.secret_key = "demnet_secret_key"
@@ -60,7 +62,13 @@ def apply_cors(resp):
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 # ----------------- Load Model -----------------
-model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+# model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+interpreter = tflite.Interpreter(model_path=TFLITE_MODEL_PATH)
+interpreter.allocate_tensors()
+
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+
 
 # ----------------- Load Chat Data -----------------
 with open(os.path.join(BASE_DIR, "chat_knowledge.json"), "r", encoding="utf-8") as f:
@@ -320,7 +328,10 @@ def predict():
 
     # -------- Model Prediction --------
     img_array = preprocess_image(path)
-    preds = model.predict(img_array)[0]
+    interpreter.set_tensor(input_details[0]["index"], img_array.astype("float32"))
+    interpreter.invoke()
+    preds = interpreter.get_tensor(output_details[0]["index"])[0]
+
 
     idx = int(np.argmax(preds))
     confidence = round(float(preds[idx]) * 100, 2)
@@ -769,6 +780,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
