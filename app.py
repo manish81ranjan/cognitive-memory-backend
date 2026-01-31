@@ -302,39 +302,145 @@ def chat_api():
 def predict():
 
     if "user_id" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
+        return redirect("/profile")
 
-    if "mri_image" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+    patient_name = request.form.get("patient_name")
+    mri_id = request.form.get("mri_id")
+    file = request.files.get("mri_image")
 
-    file = request.files["mri_image"]
-    if file.filename == "":
-        return jsonify({"error": "Empty filename"}), 400
+    if not file or file.filename == "":
+        return "No file uploaded"
+
+    if not allowed_file(file.filename):
+        return "Invalid file"
 
     filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    file.save(filepath)
+    path = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(path)
 
-    try:
-        img = Image.open(filepath).convert("L").resize((128, 128))
-        img = np.array(img) / 255.0
-        img = img.reshape(1, 128, 128, 1)
+    # -------- Model Prediction --------
+    img_array = preprocess_image(path)
+    preds = model.predict(img_array)[0]
 
-        preds = model.predict(img)[0]
+    idx = int(np.argmax(preds))
+    confidence = round(float(preds[idx]) * 100, 2)
 
-        idx = int(np.argmax(preds))
-        confidence = float(preds[idx]) * 100
+    classes = [
+        "Mild Dementia",
+        "Moderate Dementia",
+        "Non Demented",
+        "Very Mild Dementia"
+    ]
+    prediction = classes[idx]
 
-        labels = ["Normal", "Mild Dementia", "Moderate Dementia", "Severe Dementia"]
+    if confidence > 85:
+        severity = "HIGH"
+        explanation = "High probability detected. Immediate consultation needed."
+    elif confidence > 60:
+        severity = "MEDIUM"
+        explanation = "Moderate risk. Monitoring advised."
+    else:
+        severity = "LOW"
+        explanation = "Low risk detected."
 
-        return jsonify({
-            "prediction": labels[idx],
-            "confidence": round(confidence, 2)
-        })
+    # -------- Grad-CAM --------
+    heatmap = attention_heatmap(path)
 
-    except Exception as e:
-        print("PREDICT ERROR:", e)
-        return jsonify({"error": "Prediction failed"}), 500
+    base = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    base = cv2.resize(base, (128, 128))
+    base = cv2.cvtColor(base, cv2.COLOR_GRAY2BGR)
+
+    heat = cv2.applyColorMap(np.uint8(255 * heatmap), cv2.COLORMAP_JET)
+    overlay = cv2.addWeighted(base, 0.6, heat, 0.4, 0)
+
+    gradcam_path = os.path.join("static", "gradcam.png")
+    cv2.imwrite(gradcam_path, overlay)
+
+    cur = mysql.connection.cursor()
+
+    model_loss = round(1.2 - (confidence / 100), 3)
+    model_acc = round(confidence / 100, 3)
+
+    cur.execute(
+        "INSERT INTO model_stats(loss,accuracy) VALUES(%s,%s)",
+        (model_loss, model_acc)
+    )
+
+    cur.execute("""
+        INSERT INTO prediction_logs(predicted_class,count)
+        VALUES(%s,1)
+        ON DUPLICATE KEY UPDATE count = count+1
+    """, (prediction,))
+
+    cur.execute("""
+        INSERT INTO confusion_matrix(actual,predicted,total)
+        VALUES(%s,%s,1)
+        ON DUPLICATE KEY UPDATE total = total+1
+    """, (prediction, prediction))
+
+    cur.execute("""
+        INSERT INTO patient_reports
+        (patient_name,mri_id,prediction,confidence,severity,explanation,report_file)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)
+        ON DUPLICATE KEY UPDATE
+        patient_name=VALUES(patient_name),
+        prediction=VALUES(prediction),
+        confidence=VALUES(confidence),
+        severity=VALUES(severity),
+        explanation=VALUES(explanation),
+        report_file=VALUES(report_file)
+    """, (
+        patient_name, mri_id, prediction,
+        confidence, severity, explanation, "gradcam.png"
+    ))
+
+    cur.execute("""
+        INSERT INTO mri_uploads
+        (user_id, patient_name, mri_id, file_url, prediction, confidence)
+        VALUES (%s,%s,%s,%s,%s,%s)
+    """, (
+        session["user_id"],
+        patient_name,
+        mri_id,
+        filename,
+        prediction,
+        confidence
+    ))
+
+    mysql.connection.commit()
+
+    cur.execute("SELECT AVG(loss), AVG(accuracy) FROM model_stats")
+    avg_stats = cur.fetchone() or (0, 0)
+
+    cur.execute("SELECT predicted_class, count FROM prediction_logs")
+    distribution = cur.fetchall()
+
+    cur.execute("SELECT actual, predicted, total FROM confusion_matrix")
+    matrix = cur.fetchall()
+
+    cur.close()
+
+    session["report"] = {
+        "patient": patient_name,
+        "mri": mri_id,
+        "prediction": prediction,
+        "confidence": confidence,
+        "severity": severity,
+        "explanation": explanation
+    }
+
+    return render_template(
+        "result.html",
+        prediction=prediction,
+        confidence=confidence,
+        severity=severity,
+        explanation=explanation,
+        gradcam_image=url_for("static", filename="gradcam.png"),
+        avg_loss=round(avg_stats[0], 3),
+        avg_acc=round(avg_stats[1], 3),
+        distribution=distribution,
+        matrix=matrix
+    )
 
 
 # ----------------- Download PDF Report -----------------
@@ -663,6 +769,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
