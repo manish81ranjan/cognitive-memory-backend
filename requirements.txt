@@ -7,8 +7,8 @@ flask-mysqldb==2.0.0
 # Database
 PyMySQL==1.1.0
 
-# Machine Learning & Image Processing
-tensorflow-cpu==2.16.1
+# Machine Learning & Image Processing tensorflow-cpu==2.16.1
+tflite-runtime==2.14.0
 numpy==1.26.4
 Pillow==10.1.0
 opencv-python-headless==4.9.0.80
@@ -19,3 +19,4 @@ reportlab==4.0.8
 fpdf==1.7.2
 
 gunicorn==21.2.0
+
