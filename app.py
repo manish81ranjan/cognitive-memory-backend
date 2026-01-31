@@ -43,7 +43,7 @@ os.makedirs(os.path.join(BASE_DIR, "static"), exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
 # MODEL_PATH = os.path.join(BASE_DIR, "data", "best_demnet_model (1).keras")
-TFLITE_MODEL_PATH = os.path.join(BASE_DIR, "data", "best_demnet_model.tflite")
+TFLITE_MODEL_PATH = os.path.join(BASE_DIR, "data", "best_demnet_model (1).tflite")
 
 app = Flask(__name__)
 app.secret_key = "demnet_secret_key"
@@ -780,6 +780,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
