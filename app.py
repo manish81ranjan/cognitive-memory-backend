@@ -232,14 +232,77 @@ def chat_api():
     return jsonify({"reply":"Sorry, I am trained only on DEMNET medical knowledge."})
 
 
+# @app.route("/predict", methods=["GET", "POST"])
+# def predict():
+
+#     # 🚨 ABSOLUTE EXIT FOR GET
+#     if request.method == "GET":
+#         return "Predict endpoint works. Use POST.", 200
+
+#     # -------- POST ONLY BELOW --------
+
+#     if "user_id" not in session:
+#         return redirect("/profile")
+
+#     if "mri_image" not in request.files:
+#         return "No file uploaded", 400
+
+#     file = request.files["mri_image"]
+#     if file.filename == "":
+#         return "Empty filename", 400
+
+#     # ensure folders exist
+#     os.makedirs("uploads", exist_ok=True)
+#     os.makedirs("static", exist_ok=True)
+
+#     filename = secure_filename(file.filename)
+#     filepath = os.path.join("uploads", filename)
+#     file.save(filepath)
+
+#     img = cv2.imread(filepath)
+#     if img is None:
+#         return "Invalid image", 400
+
+#     img = cv2.resize(img, (224, 224))
+#     img = img / 255.0
+#     img = np.expand_dims(img, axis=0)
+
+#     model = get_model()
+#     preds = model.predict(img)[0]
+
+#     idx = int(np.argmax(preds))
+#     confidence = float(preds[idx]) * 100
+
+#     labels = ["Normal", "Mild Dementia", "Moderate Dementia", "Severe Dementia"]
+#     result = labels[idx]
+
+#     cur = mysql.connection.cursor()
+#     cur.execute(
+#         "INSERT INTO mri_results(user_id, result, confidence) VALUES (%s,%s,%s)",
+#         (session["user_id"], result, confidence)
+#     )
+#     mysql.connection.commit()
+
+#     cur.execute("SELECT AVG(loss) AS loss, AVG(accuracy) AS acc FROM model_stats")
+#     avg = cur.fetchone()
+#     cur.close()
+
+#     avg_loss = round(avg["loss"], 3) if avg and avg["loss"] else 0
+#     avg_acc  = round(avg["acc"], 3) if avg and avg["acc"] else 0
+
+#     return render_template(
+#         "result.html",
+#         prediction=result,
+#         confidence=round(confidence, 2),
+#         avg_loss=avg_loss,
+#         avg_acc=avg_acc
+#     )
+
 @app.route("/predict", methods=["GET", "POST"])
 def predict():
 
-    # 🚨 ABSOLUTE EXIT FOR GET
     if request.method == "GET":
         return "Predict endpoint works. Use POST.", 200
-
-    # -------- POST ONLY BELOW --------
 
     if "user_id" not in session:
         return redirect("/profile")
@@ -251,20 +314,15 @@ def predict():
     if file.filename == "":
         return "Empty filename", 400
 
-    # ensure folders exist
-    os.makedirs("uploads", exist_ok=True)
-    os.makedirs("static", exist_ok=True)
-
     filename = secure_filename(file.filename)
-    filepath = os.path.join("uploads", filename)
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
     file.save(filepath)
 
     img = cv2.imread(filepath)
     if img is None:
         return "Invalid image", 400
 
-    img = cv2.resize(img, (224, 224))
-    img = img / 255.0
+    img = cv2.resize(img, (224, 224)) / 255.0
     img = np.expand_dims(img, axis=0)
 
     model = get_model()
@@ -274,30 +332,11 @@ def predict():
     confidence = float(preds[idx]) * 100
 
     labels = ["Normal", "Mild Dementia", "Moderate Dementia", "Severe Dementia"]
-    result = labels[idx]
 
-    cur = mysql.connection.cursor()
-    cur.execute(
-        "INSERT INTO mri_results(user_id, result, confidence) VALUES (%s,%s,%s)",
-        (session["user_id"], result, confidence)
-    )
-    mysql.connection.commit()
-
-    cur.execute("SELECT AVG(loss) AS loss, AVG(accuracy) AS acc FROM model_stats")
-    avg = cur.fetchone()
-    cur.close()
-
-    avg_loss = round(avg["loss"], 3) if avg and avg["loss"] else 0
-    avg_acc  = round(avg["acc"], 3) if avg and avg["acc"] else 0
-
-    return render_template(
-        "result.html",
-        prediction=result,
-        confidence=round(confidence, 2),
-        avg_loss=avg_loss,
-        avg_acc=avg_acc
-    )
-
+    return jsonify({
+        "prediction": labels[idx],
+        "confidence": round(confidence, 2)
+    })
 
 # ----------------- Download PDF Report -----------------
 @app.route("/download_report")
@@ -625,6 +664,7 @@ def view_report(mri_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
